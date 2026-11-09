@@ -30,7 +30,7 @@
   <p class="dim">iPad の Safari（またはホーム画面のアプリ）で開いてください。1 回目のあと、<b>このページを閉じてもう一度開く</b>と、鍵を覚えていられるかが分かります。外には何も送りません（この画面の中だけで確かめます）。</p>
   <div class="card" id="results"></div>
   <div>
-    <button id="cam">カメラを一瞬使って確かめる（④）</button>
+    <button id="cam">カメラを一瞬使って確かめる（③b・③c・⑤）</button>
     <button class="sub" id="again">もう一度確かめる</button>
     <button class="sub" id="reset">覚えた鍵を消す</button>
   </div>
@@ -46,6 +46,8 @@ const ITEMS = [
   ["cert", "① 暗号の鍵を覚えておけるか（閉じて開き直しても同じ鍵）"],
   ["munge", "② つなぐための合言葉を毎回同じにできるか"],
   ["connect", "③ 合言葉を同じにして、実際につながるか（この画面の中で）"],
+  ["connectCam", "③b カメラを使っている間に、合言葉を同じにしてつながるか"],
+  ["plainCam", "③c カメラを使っている間に、合言葉を変えずにつながるか（比べる用）"],
   ["ipNoCam", "④ カメラを使わずに iPad の住所が分かるか"],
   ["ipCam", "⑤ カメラを一瞬使えば住所が分かるか"],
   ["port", "⑥ ポート番号（毎回変わるはず）"],
@@ -123,7 +125,7 @@ async function checkCert() {
 }
 
 // ②③: PC 役(申し込み)と iPad 役(返事)をこの画面の中に作り、両方の合言葉を決まったものにしてつなぐ
-async function checkMunge(cert) {
+async function checkMunge(cert, key = "connect", fix = true) {
   let a, b;
   try {
     a = new RTCPeerConnection({ iceServers: [] });
@@ -131,20 +133,23 @@ async function checkMunge(cert) {
     const ch = a.createDataChannel("t");
     const opened = new Promise((res) => { ch.onopen = () => res(true); setTimeout(() => res(false), 8000); });
     const offer = await a.createOffer();
-    await a.setLocalDescription({ type: "offer", sdp: munge(offer.sdp, "pcpc", "pcfixedpassword01234567") });
+    await a.setLocalDescription(fix ? { type: "offer", sdp: munge(offer.sdp, "pcpc", "pcfixedpassword01234567") } : offer);
     await gathered(a);
     await b.setRemoteDescription(a.localDescription);
     const ans = await b.createAnswer();
     try {
-      await b.setLocalDescription({ type: "answer", sdp: munge(ans.sdp, UFRAG, PWD) });
-    } catch (e) { set("munge", "ng", "合言葉を書き換えると断られました(" + e.name + "): " + e.message); set("connect", "ng", "②ができないので確かめられません"); return; }
-    const kept = (b.localDescription.sdp.match(/a=ice-ufrag:(\S+)/) || [])[1] === UFRAG;
-    set("munge", kept ? "ok" : "ng", kept ? "返事の側(iPad)の合言葉を決まったものにできました" : "書き換えが無視されました");
+      await b.setLocalDescription(fix ? { type: "answer", sdp: munge(ans.sdp, UFRAG, PWD) } : ans);
+    } catch (e) { if (key === "connect") set("munge", "ng", "合言葉を書き換えると断られました(" + e.name + "): " + e.message); set(key, "ng", "合言葉を書き換えられません"); return; }
+    if (key === "connect") {
+      const kept = (b.localDescription.sdp.match(/a=ice-ufrag:(\S+)/) || [])[1] === UFRAG;
+      set("munge", kept ? "ok" : "ng", kept ? "返事の側(iPad)の合言葉を決まったものにできました" : "書き換えが無視されました");
+    }
     await gathered(b);
     await a.setRemoteDescription(b.localDescription);
     const ok = await opened;
-    set("connect", ok ? "ok" : "ng", ok ? "つながりました" : "8 秒たってもつながりませんでした（状態: " + b.iceConnectionState + "）");
-  } catch (e) { set("munge", "ng", e.name + ": " + e.message); }
+    const where = cands(a.localDescription.sdp).map((x) => x.ip).join(", ");
+    set(key, ok ? "ok" : "ng", (ok ? "つながりました" : "8 秒たってもつながりませんでした（状態: " + b.iceConnectionState + "）") + "（住所: " + where + "）");
+  } catch (e) { set(key, "ng", e.name + ": " + e.message); }
   finally { try { a && a.close(); b && b.close(); } catch {} }
 }
 
@@ -170,6 +175,11 @@ async function checkCam() {
   try {
     const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     const c = await addrs();
+    // カメラが動いている間(本当の住所が出る間)に、合言葉を固定した場合と、しない場合でつないでみる
+    set("connectCam", "wait", "確かめています…"); set("plainCam", "wait", "確かめています…");
+    let cert = null; try { cert = (await kv("get", "cert"))?.cert || null; } catch {}
+    await checkMunge(cert, "connectCam", true);
+    await checkMunge(cert, "plainCam", false);
     s.getTracks().forEach((t) => t.stop());
     const real = c.filter((x) => isIp(x.ip));
     set("ipCam", real.length ? "ok" : "ng", real.length ? "住所: " + [...new Set(real.map((x) => x.ip))].join(", ") + " ／ ポート: " + real.map((x) => x.port).join(", ") : "カメラを使っても隠れていました: " + c.map((x) => x.ip).join(", "));
@@ -183,6 +193,7 @@ async function run() {
   await checkMunge(cert);
   await checkAddr();
   if (!R.ipCam) set("ipCam", "wait", "「カメラを一瞬使って確かめる」を押してください");
+  if (!R.connectCam) { set("connectCam", "wait", "「カメラを一瞬使って確かめる」を押してください"); set("plainCam", "wait", "「カメラを一瞬使って確かめる」を押してください"); }
 }
 $("cam").onclick = checkCam;
 $("again").onclick = run;
