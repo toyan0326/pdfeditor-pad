@@ -17,7 +17,7 @@ let role = null;     // "pc" | "pad"
 let pc = null, ch = null, stream = null, scanTimer = 0, scanFn = null, failTimer = 0;
 let localIps = [], remoteIps = [];
 // iPad で開くページの場所(パソコンでファイルから開いたときも、iPad にはここを案内する)
-const PAD_URL = location.protocol === "https:" ? location.href.split("#")[0].split("?")[0] : "https://toyan0326.github.io/pdfeditor-pad/";
+const PAD_URL = location.protocol === "https:" ? location.href.split("#")[0].split("?")[0] : "https://toyan0326.github.io/pdfeditor-pad/test/";
 
 // ---------- 状態の表示 ----------
 function badge(text, cls) { const b = $("badge"); b.textContent = text; b.className = cls || ""; }

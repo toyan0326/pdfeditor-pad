@@ -2,99 +2,640 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<link rel="manifest" href="manifest.json">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>iPad 直接接続テスト</title>
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>pdfeditor 手書き</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
 <style>
-  :root { --bg:#1e1f22; --panel:#2a2c30; --line:#3a3d42; --text:#e8e8ea; --dim:#9a9ca3; --accent:#4c8dff; --ok:#3fbf6f; --ng:#e5534b; --warn:#d9a33b; }
-  * { box-sizing: border-box; }
-  html, body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; }
-  main { max-width: 760px; margin: 0 auto; padding: 16px; }
-  h1 { font-size: 20px; margin: 4px 0 2px; }
-  .sub { color: var(--dim); font-size: 13px; margin: 0 0 14px; }
-  .roles { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; cursor: pointer; }
-  button.big { padding: 18px 14px; font-size: 17px; }
-  button.primary { background: var(--accent); border-color: var(--accent); color:#fff; }
-  button:disabled { opacity:.5; cursor: default; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 12px 0; }
-  .step { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
-  .hint { color: var(--dim); font-size: 13px; margin: 6px 0 0; }
-  #badge { display:inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; background:#444; }
-  #badge.ok { background: var(--ok); color:#fff; } #badge.ng { background: var(--ng); color:#fff; } #badge.wait { background: var(--warn); color:#111; }
-  .media { display:flex; gap:14px; flex-wrap: wrap; align-items:flex-start; justify-content:center; }
-  video { width: 280px; max-width: 100%; border-radius: 8px; background:#000; }
-  video.mirror { transform: scaleX(-1); }
-  #qr { background:#fff; border-radius: 8px; padding: 10px; line-height:0; }
-  #qr svg, #qr img { width: min(78vw, 340px); height: auto; display:block; }
-  #qr.small svg, #qr.small img { width: 260px; }
-  #pad { width:100%; height: 46vh; min-height: 260px; background:#fff; border-radius: 8px; touch-action: none; display:block; }
-  .row { display:flex; gap:8px; flex-wrap: wrap; align-items:center; }
-  .kv { display:grid; grid-template-columns: max-content 1fr; gap: 2px 12px; font-size: 13px; }
-  .kv b { color: var(--dim); font-weight: 500; }
-  details { margin-top: 12px; } summary { cursor:pointer; color: var(--dim); }
-  pre#log { white-space: pre-wrap; word-break: break-all; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; max-height: 260px; overflow:auto; background:#16171a; padding:8px; border-radius:6px; }
-  textarea { width:100%; font: 12px ui-monospace, Menlo, Consolas, monospace; background:#16171a; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px; }
-  .hide { display:none !important; }
-  .diag li { margin: 4px 0; }
+  :root { --bg:#3b3e44; --bar:#232529; --btn:#34373c; --fg:#eee; --sub:#aab; --sel:#4b8bf5; }
+  * { box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--fg); overscroll-behavior:none;
+    font: 15px/1.3 -apple-system, "Hiragino Sans", sans-serif; }
+  .bar { position:fixed; left:0; right:0; top:0; z-index:5; background:var(--bar);
+    padding: env(safe-area-inset-top) max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+    display:flex; align-items:center; gap:6px; height: calc(54px + env(safe-area-inset-top)); overflow-x:auto; scrollbar-width:none; }
+  .bar::-webkit-scrollbar { display:none; }
+  .bar button { font:inherit; color:var(--fg); background:var(--btn); border:0; border-radius:9px; height:40px; min-width:42px; padding:0 10px; flex:none; }
+  .bar button.sel { box-shadow: inset 0 0 0 3px var(--sel); }
+  .bar button:disabled { opacity:.35; }
+  .sep { width:1px; height:28px; background:#555; flex:none; margin:0 2px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#c33; flex:none; }
+  .dot.on { background:#3c3; }
+  #pg { min-width:54px; text-align:center; color:var(--sub); flex:none; }
+  .tool svg { width:22px; height:22px; vertical-align:middle; }
+  #colorbtn { padding:0; width:42px; }
+  #colorbtn i, .sw i { display:inline-block; width:24px; height:24px; border-radius:50%; vertical-align:middle; box-shadow: 0 0 0 2px #fff8; }
+  .wd i { display:inline-block; background:#ddd; border-radius:50%; vertical-align:middle; }
+  #vp { position:fixed; left:0; right:0; bottom:0; top: calc(54px + env(safe-area-inset-top)); overflow:hidden; touch-action:none; }
+  #stage { position:absolute; left:0; top:0; transform-origin:0 0; background:#fff; box-shadow:0 2px 14px #0008; }
+  #stage img, #stage canvas { position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; }
+  #stage img.tile { width:auto; height:auto; }
+  #stage img[src=""] { display:none; }
+  #hover { position:absolute; border-radius:50%; pointer-events:none; display:none; border:1.5px solid #0009; box-shadow:0 0 0 1px #fff9; z-index:3; }
+  #pal { position:fixed; z-index:9; top: calc(60px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%); background:#2a2c31; border-radius:14px;
+    padding:12px; box-shadow:0 8px 30px #000a; display:none; width:min(92vw, 420px); }
+  #pal.open { display:block; }
+  #pal h4 { margin:4px 2px 8px; font-size:13px; color:var(--sub); font-weight:500; }
+  .grid { display:grid; grid-template-columns:repeat(6, 1fr); gap:10px; margin-bottom:12px; }
+  .sw { height:44px; border:0; border-radius:10px; background:var(--btn); }
+  .sw.sel { box-shadow: inset 0 0 0 3px var(--sel); }
+  .sw i { width:28px; height:28px; }
+  #custom { width:100%; height:44px; border:0; border-radius:10px; background:var(--btn); padding:4px; }
+  #toast { position:fixed; left:50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:#000c; color:#fff;
+    padding:9px 16px; border-radius:10px; display:none; z-index:10; max-width:90vw; text-align:center; }
+  #help { position:fixed; inset:0; z-index:20; background:#000b; display:none; align-items:center; justify-content:center; }
+  #help.open { display:flex; }
+  #help div { background:#2a2c31; border-radius:14px; padding:18px 22px; max-width:520px; line-height:1.7; }
+  #help b { color:#fff; }
+  /* PC とつなぐ(直接) */
+  #pair { position:fixed; inset:0; z-index:30; background:#1e1f22f2; display:none; align-items:center; justify-content:center; overflow:auto; }
+  #pair.open { display:flex; }
+  #pair .pbox { width:min(92vw, 520px); text-align:center; padding:20px; }
+  #pair h2 { font-size:20px; margin:0 0 6px; }
+  #pair p { color:var(--sub); margin:6px 0; line-height:1.6; }
+  #pair #pair-msg { color:var(--fg); font-weight:600; font-size:17px; margin:12px 0; }
+  #pair video { width:100%; max-height:46vh; object-fit:cover; border-radius:12px; background:#000; display:none; }
+  #pair video.on { display:block; }
+  #pair-qr { background:#fff; border-radius:12px; padding:12px; display:none; line-height:0; margin:8px auto; width:min(80vw, 420px); }
+  #pair-qr.on { display:block; }
+  #pair-qr svg { width:100%; height:auto; display:block; }
+  #pair button { font:inherit; color:#fff; background:#4b8bf5; border:0; border-radius:10px; padding:12px 22px; margin-top:12px; }
+  #pair .small { font-size:13px; }
 </style>
 </head>
 <body>
-<main>
-  <h1>iPad 直接接続テスト <span id="badge">未接続</span></h1>
-  <p class="sub">パソコンと iPad が、外のサーバーを通さずに社内の Wi-Fi の中だけで直接つながるかを確かめます。接続の情報は QR コードで読み合います。</p>
+<div class="bar" id="bar">
+  <span class="dot" id="dot"></span>
+  <button id="prev" aria-label="前のページ">◀</button><span id="pg">– / –</span><button id="next" aria-label="次のページ">▶</button>
+  <span class="sep"></span>
+  <button class="tool" data-tool="pen" aria-label="ペン"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg></button>
+  <button class="tool" data-tool="marker" aria-label="マーカー"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l6-6 3 3-6 6z"/><path d="M9 14l-2 5h4l1-2"/><path d="M4 21h9" stroke-width="3" opacity=".6"/></svg></button>
+  <button class="tool" data-tool="eraser" aria-label="消しゴム"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 20h12"/><path d="M4 15l9-9 6 6-8 8H8z"/><path d="M9 10l6 6"/></svg></button>
+  <span class="sep"></span>
+  <button id="colorbtn" aria-label="色"><i></i></button>
+  <button class="wd" data-k="0" aria-label="細く"><i></i></button><button class="wd" data-k="1" aria-label="ふつう"><i></i></button><button class="wd" data-k="2" aria-label="太く"><i></i></button>
+  <span class="sep"></span>
+  <button id="undo" aria-label="元に戻す">↶</button><button id="redo" aria-label="やり直す">↷</button>
+  <span class="sep"></span>
+  <button id="finger" aria-label="指でも書く">指 ✕</button>
+  <button id="fit" aria-label="全体を表示">⤢</button>
+  <button id="helpbtn" aria-label="使い方">？</button>
+</div>
+<div id="vp"><div id="stage"><img id="page" src="" alt=""><img id="tile" class="tile" src="" alt=""><canvas id="live"></canvas><canvas id="cur"></canvas><div id="hover"></div></div></div>
+<div id="pal">
+  <h4>色</h4><div class="grid" id="presets"></div>
+  <h4>最近使った色</h4><div class="grid" id="recent"></div>
+  <h4>そのほかの色</h4><input type="color" id="custom">
+</div>
+<div id="toast"></div>
+<div id="pair"><div class="pbox">
+  <h2>PC とつなぐ</h2>
+  <p id="pair-msg"></p>
+  <video id="pair-cam" playsinline muted></video>
+  <div id="pair-qr"></div>
+  <button id="pair-go">カメラで PC の QR を読む</button>
+  <p class="small">PC の pdfeditor で「iPad で書く」を押すと QR が出ます。外のサーバーは通さず、同じ Wi-Fi の中で PC と直接つながります。</p>
+  <p class="small" id="pair-home">共有ボタン →「ホーム画面に追加」しておくと、次からはネットにつながらなくても開けます。</p>
+</div></div>
+<div id="help"><div>
+  <b>Apple Pencil</b> で書く。筆圧で太さ、傾けると少し太く。ペン先を近づけると（対応する iPad では）太さの印が出ます。<br>
+  <b>指 2本</b>: つまんで拡大・ずらす。<b>2本でトン</b>: 元に戻す。<b>3本でトン</b>: やり直す。<br>
+  <b>指 1本でトントン</b>: ペン ⇄ 消しゴム（Pencil のダブルタップの代わり。Safari には Pencil のダブルタップが届かないため）。<br>
+  <b>消しゴム</b>: なぞった線を1本ずつ消します。<br>
+  書いた線は、少し手を止めると PC の PDF に注釈として入ります（PC で ⌘Z / Ctrl+Z でも戻せます）。
+  <p style="text-align:right;margin:10px 0 0"><button id="helpclose" style="font:inherit;border:0;border-radius:8px;padding:8px 16px;background:#4b8bf5;color:#fff">閉じる</button></p>
+</div></div>
+<script>
+(() => {
+"use strict";
+const $ = (id) => document.getElementById(id);
+const Q = new URLSearchParams(location.search);
+const TOKEN = Q.get("k") || "";
+// 表示の言語: PC が English のときは QR の URL に lang=en が付く
+const EN = Q.get("lang") === "en";
+const T = {
+  "KaruPDF 手書き": "pdfeditor handwriting", "pdfeditor 手書き": "pdfeditor handwriting",
+  "読み込めませんでした。ページを開き直してください": "Could not load. Please reopen the page.", "前のページ": "Previous page", "次のページ": "Next page",
+  "ペン": "Pen", "マーカー": "Marker", "消しゴム": "Eraser", "色": "Color", "細く": "Thin", "ふつう": "Medium", "太く": "Thick",
+  "元に戻す": "Undo", "やり直す": "Redo", "指でも書く": "Draw with a finger too", "全体を表示": "Fit page", "使い方": "How to use",
+  "最近使った色": "Recent colors", "そのほかの色": "Other colors", "閉じる": "Close",
+  "PC につないでいます…": "Connecting to the PC…", "PC で PDF を開いてください": "Open a PDF on the PC",
+  "QR からもう一度開いてください（合言葉がありません）": "Open this page from the QR code again (the key is missing)",
+  "PC とつなぐ": "Connect to the PC", "カメラで PC の QR を読む": "Scan the PC's QR code",
+  "PC の pdfeditor で「iPad で書く」を押すと QR が出ます。外のサーバーは通さず、同じ Wi-Fi の中で PC と直接つながります。": "Press “Write on iPad” in pdfeditor on the PC to show a QR code. The iPad connects to the PC directly on the same Wi-Fi, without any outside server.",
+  "共有ボタン →「ホーム画面に追加」しておくと、次からはネットにつながらなくても開けます。": "Add this page to your Home Screen (Share → Add to Home Screen) to open it next time without internet.",
+  "準備しています…": "Getting ready…",
+  "カメラの使用を許可してください": "Please allow the camera",
+  "PC に出ている QR にカメラを向けてください": "Point the camera at the QR code on the PC",
+  "この QR を、PC のカメラに向けてください": "Hold this QR code up to the PC's camera",
+  "つないでいます…": "Connecting…",
+  "つながりました": "Connected",
+  "つながりませんでした。PC と iPad が同じ Wi-Fi か確かめて、PC で「QR を作り直す」を押してから読み直してください": "Could not connect. Check that the PC and the iPad are on the same Wi-Fi, press “Make a new QR code” on the PC, and scan again.",
+  "PC と切れました。PC の QR をもう一度読んでください": "Disconnected from the PC. Scan the PC's QR code again.",
+  "カメラが使えません。設定 → Safari → カメラ で許可してください": "The camera is not available. Allow it in Settings → Safari → Camera.",
+  "この QR は PC の QR ではありません": "This is not the PC's QR code",
+};
+const tr = (s) => (EN && T[s]) || s;
+if (EN) {
+  document.documentElement.lang = "en";
+  document.title = tr(document.title);
+  for (const el of document.querySelectorAll("[aria-label]")) el.setAttribute("aria-label", tr(el.getAttribute("aria-label")));
+  for (const el of document.querySelectorAll("h4, #pair h2, #pair button, #pair p.small")) el.textContent = tr(el.textContent);
+  $("help").firstElementChild.innerHTML = `<b>Apple Pencil</b>: write. Pressure changes the width; tilting makes it a little wider. Hovering the tip shows the width (on iPads that support it).<br>
+  <b>Two fingers</b>: pinch to zoom and pan. <b>Two-finger tap</b>: undo. <b>Three-finger tap</b>: redo.<br>
+  <b>One-finger double tap</b>: pen ⇄ eraser (instead of the Pencil double tap, which Safari doesn't receive).<br>
+  <b>Eraser</b>: removes each stroke you trace over.<br>
+  Strokes go into the PDF on the PC as annotations when you pause (you can also undo on the PC with ⌘Z / Ctrl+Z).
+  <p style="text-align:right;margin:10px 0 0"><button id="helpclose" style="font:inherit;border:0;border-radius:8px;padding:8px 16px;background:#4b8bf5;color:#fff">Close</button></p>`;
+}
+const PRESETS = [[17,17,17],[110,110,110],[220,30,30],[240,120,0],[230,190,0],[40,160,60],[0,150,170],[30,90,220],[110,60,200],[220,60,150],[140,80,30],[255,255,255]];
+const MARKER_PRESETS = [[255,225,40],[140,235,120],[120,215,255],[255,150,205],[255,170,70],[200,160,255]];
+const WIDTHS = { pen: [0.6, 1.2, 2.4], marker: [8, 12, 18], eraser: [6, 12, 24] };
 
-  <section id="choose" class="card">
-    <p class="step">どちらで開いていますか？</p>
-    <div class="roles">
-      <button class="big" id="go-pc">💻 このパソコンで始める</button>
-      <button class="big" id="go-pad">📱 この iPad で始める</button>
-    </div>
-    <div id="open-on-pad" class="hide" style="margin-top:14px">
-      <p class="hint">iPad では、このページを開いてください（iPad のカメラでこの QR を読むと開けます）<br><span id="pad-url"></span><br>一度開いたら、共有ボタン →「ホーム画面に追加」しておくと、次からはネットにつながらなくても開けます。</p>
-      <div class="media"><div id="url-qr" class="small" style="background:#fff;border-radius:8px;padding:8px;line-height:0"></div></div>
-    </div>
-  </section>
+// ---------- 状態(道具は iPad に覚えておく) ----------
+const pref = (() => { try { return JSON.parse(localStorage.getItem("karupdf.pad") || "{}"); } catch { return {}; } })();
+const S = {
+  tool: pref.tool || "pen",
+  color: { pen: pref.penColor || [17,17,17], marker: pref.markerColor || [255,225,40] },
+  wk: Object.assign({ pen: 1, marker: 1, eraser: 1 }, pref.wk || {}),
+  recent: pref.recent || [],
+  fingerDraw: false,
+  page: null,        // {i, n, w, h, pw, ph, ver}
+  zoom: 1, panX: 0, panY: 0, baseW: 0, baseH: 0,
+  live: [],          // まだ PDF に入っていない(PC から「入った」と言われていない)線
+  cur: null,         // いま書いている線
+  erase: null,       // いま消している道すじ
+  connected: false,
+  lastTool: "pen",
+};
+function savePref() {
+  try { localStorage.setItem("karupdf.pad", JSON.stringify({ tool: S.tool === "eraser" ? S.lastTool : S.tool, penColor: S.color.pen, markerColor: S.color.marker, wk: S.wk, recent: S.recent })); } catch {}
+}
+const toast = (() => { let tm = 0; return (t, ms = 1800) => { const el = $("toast"); el.textContent = tr(t); el.style.display = t ? "block" : "none"; clearTimeout(tm); if (t && ms) tm = setTimeout(() => (el.style.display = "none"), ms); }; })();
 
-  <section id="run" class="card hide">
-    <p class="step" id="step"></p>
-    <p class="hint" id="step-hint"></p>
-    <div class="media" style="margin-top:10px">
-      <video id="video" playsinline muted class="hide"></video>
-      <div id="qr" class="hide"></div>
-    </div>
-    <div class="row" style="margin-top:10px">
-      <button id="retry">最初からやり直す</button>
-    </div>
-  </section>
+// ---------- つなぐ ----------
+// 合言葉(k)が付いていれば、以前のつなぎ方(PC のサーバーに WebSocket)。
+// 無ければ直接つなぐ(WebRTC。PC の QR をカメラで読み、自分の QR を PC のカメラに見せる。rtclink.js)
+const RTC = !TOKEN;
+let ws = null, link = null;
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws?k=${encodeURIComponent(TOKEN)}&role=pad`);
+  ws.onopen = () => { S.connected = true; $("dot").classList.add("on"); toast(""); send({ t: "hello", dpr: devicePixelRatio, w: innerWidth, h: innerHeight }); };
+  ws.onclose = () => {
+    S.connected = false; $("dot").classList.remove("on");
+    toast("PC につないでいます…", 0);
+    setTimeout(connect, 1500);
+  };
+  ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } onMsg(m); };
+}
+const send = (m) => {
+  if (RTC) { if (link && link.open) link.send(m); return; }
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(m));
+};
 
-  <section id="done" class="card hide">
-    <p class="step">✅ つながりました</p>
-    <div class="kv" id="pair"></div>
-    <p class="hint">下の白い所に書くと、もう片方の画面にすぐ映ります。</p>
-    <canvas id="pad"></canvas>
-    <div class="row" style="margin-top:8px"><button id="clear">消す</button></div>
-  </section>
+// ---------- 直接つなぐ ----------
+const loadScript = (src) => new Promise((res, rej) => { const el = document.createElement("script"); el.src = src; el.onload = res; el.onerror = () => rej(new Error(src)); document.head.appendChild(el); });
+const pair = { cam: null, stopScan: null, pc: null, timer: 0, busy: false };
+function pairMsg(t) { $("pair-msg").textContent = tr(t); }
+function pairOpen(t) {
+  $("pair").classList.add("open");
+  $("pair-qr").classList.remove("on"); $("pair-cam").classList.remove("on");
+  $("pair-go").style.display = "";
+  pairMsg(t || "");
+}
+function pairStopCam() {
+  if (pair.stopScan) pair.stopScan();
+  if (pair.cam) pair.cam.stop();
+  pair.stopScan = pair.cam = null; $("pair-cam").classList.remove("on");
+}
+const hashOffer = () => {
+  let h = location.hash.slice(1); try { h = decodeURIComponent(h); } catch {}
+  const o = RtcLink.parse(h); return o && o.offer ? o : null;
+};
+async function pairStart() {
+  if (pair.busy) return;
+  pair.busy = true;
+  try {
+    pairOpen("準備しています…");
+    $("pair-go").style.display = "none";
+    await Promise.all([loadScript("vendor/jsQR.js"), loadScript("vendor/qrcode.js")]);
+    pairMsg("カメラの使用を許可してください");
+    // カメラが動いている間だけ、Safari は iPad の本当の住所を出す(PC から声をかけるのに要る)
+    try { pair.cam = await RtcLink.camera($("pair-cam"), "environment"); }
+    catch (e) { pairOpen("カメラが使えません。設定 → Safari → カメラ で許可してください"); return; }
+    const offer = hashOffer();
+    if (offer) { await answer(offer); return; }
+    $("pair-cam").classList.add("on");
+    pairMsg("PC に出ている QR にカメラを向けてください");
+    await new Promise((done) => {
+      pair.stopScan = RtcLink.scan($("pair-cam"), async (txt) => {
+        const o = RtcLink.parse(txt);
+        if (!o || !o.offer) { toast("この QR は PC の QR ではありません"); return false; }
+        await answer(o); done(); return true;
+      });
+    });
+  } finally { pair.busy = false; }
+}
+async function answer(offer) {
+  if (pair.pc) try { pair.pc.close(); } catch {}
+  const a = await RtcLink.answer(offer);
+  pair.pc = a.pc;
+  pairStopCam();
+  // 使った申し込みは URL から消す(読み込み直しで古い QR を使わない)
+  try { history.replaceState(null, "", location.pathname + location.search); } catch {}
+  const q = qrcode(0, "M"); q.addData(a.code, "Byte"); q.make();
+  $("pair-qr").innerHTML = q.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+  $("pair-qr").classList.add("on");
+  pairMsg("この QR を、PC のカメラに向けてください");
+  clearTimeout(pair.timer);
+  pair.timer = setTimeout(() => { if (!(link && link.open)) { pairOpen("つながりませんでした。PC と iPad が同じ Wi-Fi か確かめて、PC で「QR を作り直す」を押してから読み直してください"); } }, 45000);
+  const pc = a.pc;
+  a.channel.then((dc) => {
+    const ready = () => {
+      if (pair.pc !== pc) return;
+      clearTimeout(pair.timer);
+      link = RtcLink.channel(dc, onMsg);
+      S.connected = true; $("dot").classList.add("on");
+      $("pair").classList.remove("open");
+      toast("つながりました");
+      send({ t: "hello", dpr: devicePixelRatio, w: innerWidth, h: innerHeight });
+    };
+    if (dc.readyState === "open") ready(); else dc.addEventListener("open", ready);
+    const lost = () => {
+      if (pair.pc !== pc) return;
+      link = null; S.connected = false; $("dot").classList.remove("on");
+      pairOpen("PC と切れました。PC の QR をもう一度読んでください");
+    };
+    dc.addEventListener("close", lost);
+    pc.addEventListener("connectionstatechange", () => { if (pc.connectionState === "failed" || pc.connectionState === "closed") lost(); });
+  });
+}
 
-  <section id="fail" class="card hide">
-    <p class="step">❌ つながりませんでした</p>
-    <ul class="diag" id="diag"></ul>
-    <p class="hint">この画面の写真か、下の「くわしい記録」を送ってもらえれば原因を調べます。</p>
-  </section>
+function onMsg(m) {
+  if (m.t === "page") {
+    const same = S.page && S.page.i === m.i && S.page.w === m.w && S.page.h === m.h && S.page.docKey === m.docKey;
+    S.page = m;
+    $("pg").textContent = `${m.i + 1} / ${m.n}`;
+    $("prev").disabled = m.i <= 0; $("next").disabled = m.i >= m.n - 1;
+    const img = $("page");
+    const done = new Set(m.done || []);
+    img.onload = () => {
+      // 新しい絵に入った線は、手元の下書きから消す(二重に見えたりちらついたりしないように)
+      if (done.size) { S.live = S.live.filter((s) => !done.has(s.id)); drawLive(); }
+      if (!same) { clearTile(); }
+      else requestTile(true);
+    };
+    img.src = m.img;
+    if (!same) { S.live = []; layout(true); clearTile(); }
+    else drawLive();
+  } else if (m.t === "tile") {
+    if (!S.page || m.ver !== S.page.ver) return;
+    const t = $("tile");
+    t.onload = () => {
+      t.style.left = m.rect[0] * S.baseW + "px"; t.style.top = m.rect[1] * S.baseH + "px";
+      t.style.width = m.rect[2] * S.baseW + "px"; t.style.height = m.rect[3] * S.baseH + "px";
+      t.style.display = "block";
+    };
+    t.src = m.img;
+  } else if (m.t === "hide") {
+    const ids = new Set(m.ids || []);
+    S.live = S.live.filter((s) => !ids.has(s.id)); drawLive();
+  } else if (m.t === "toast") {
+    toast(m.text);
+  } else if (m.t === "erased") {
+    S.erase = null; clearCur();
+  }
+}
 
-  <details id="more">
-    <summary>くわしい記録</summary>
-    <div class="kv" id="ips" style="margin:8px 0"></div>
-    <pre id="log"></pre>
-    <p class="hint">カメラが使えないときは、相手に出たコードをここに貼っても進められます。</p>
-    <textarea id="code-out" rows="3" readonly placeholder="自分のコード"></textarea>
-    <textarea id="code-in" rows="3" placeholder="相手のコードを貼る"></textarea>
-    <div class="row"><button id="code-go">貼ったコードで進める</button></div>
-  </details>
-</main>
-<script src="vendor/qrcode.js"></script>
-<script src="vendor/jsQR.js"></script>
-<script src="rtc.js"></script>
+// ---------- 表示: ページを入る大きさに、指で拡大・ずらす ----------
+const vp = $("vp"), stage = $("stage"), live = $("live"), cur = $("cur");
+// desynchronized: 画面の更新を待たずに描く(対応していれば遅れが減る)
+const lg = live.getContext("2d", { desynchronized: true }) || live.getContext("2d");
+const cg = cur.getContext("2d", { desynchronized: true }) || cur.getContext("2d");
+function layout(reset) {
+  if (!S.page) return;
+  const r = vp.getBoundingClientRect();
+  const k = Math.min((r.width - 16) / S.page.w, (r.height - 16) / S.page.h);
+  S.baseW = Math.round(S.page.w * k); S.baseH = Math.round(S.page.h * k);
+  stage.style.width = S.baseW + "px"; stage.style.height = S.baseH + "px";
+  if (reset) { S.zoom = 1; S.panX = (r.width - S.baseW) / 2; S.panY = (r.height - S.baseH) / 2; }
+  applyView(); sizeCanvases();
+}
+function applyView() { stage.style.transform = `translate(${S.panX}px, ${S.panY}px) scale(${S.zoom})`; }
+// 線の絵の細かさ: 拡大に合わせる(上限あり)
+function sizeCanvases() {
+  const k = devicePixelRatio * Math.min(S.zoom, 3);
+  let w = Math.round(S.baseW * k), h = Math.round(S.baseH * k);
+  const lim = 16e6; if (w * h > lim) { const f = Math.sqrt(lim / (w * h)); w = Math.round(w * f); h = Math.round(h * f); }
+  for (const c of [live, cur]) { c.width = w; c.height = h; }
+  drawLive(); clearCur();
+}
+addEventListener("resize", () => layout(false));
+const toPage = (e) => {
+  const r = vp.getBoundingClientRect();
+  return [(e.clientX - r.left - S.panX) / (S.baseW * S.zoom), (e.clientY - r.top - S.panY) / (S.baseH * S.zoom)];
+};
+$("fit").onclick = () => { layout(true); clearTile(); };
+
+// 拡大したら、その範囲だけ PC にくっきり描いてもらう
+let tileTm = 0;
+function clearTile() { const t = $("tile"); t.style.display = "none"; t.removeAttribute("src"); }
+function requestTile(now) {
+  clearTimeout(tileTm);
+  if (!S.page || S.zoom < 1.4) { clearTile(); return; }
+  tileTm = setTimeout(() => {
+    const r = vp.getBoundingClientRect();
+    const x0 = Math.max(0, -S.panX / (S.baseW * S.zoom)), y0 = Math.max(0, -S.panY / (S.baseH * S.zoom));
+    const x1 = Math.min(1, (r.width - S.panX) / (S.baseW * S.zoom)), y1 = Math.min(1, (r.height - S.panY) / (S.baseH * S.zoom));
+    if (x1 <= x0 || y1 <= y0) return;
+    const px = Math.round(Math.min(2600, (x1 - x0) * S.baseW * S.zoom * devicePixelRatio));
+    send({ t: "view", rect: [x0, y0, x1 - x0, y1 - y0], px, ver: S.page.ver });
+  }, now ? 30 : 350);
+}
+
+// ---------- 線を描く(PC と同じ太さの式) ----------
+const pf = (p) => 0.45 + 0.85 * Math.sqrt(Math.max(0, Math.min(1, p)));
+function strokePx(s, p) { const W = live.width, pw = (S.page && S.page.pw) || 595; return Math.max(0.7, (s.marker ? s.width : s.width * pf(p)) / pw * W); }
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+function drawStroke(g, s) {
+  const W = g.canvas.width, H = g.canvas.height, P = s.pts;
+  g.lineCap = "round"; g.lineJoin = "round";
+  if (s.marker) {
+    // マーカー: 1本を1回で塗る(重なった所が濃くならない)
+    g.strokeStyle = rgba(s.color, s.alpha / 255); g.fillStyle = g.strokeStyle; g.lineWidth = strokePx(s, 0.5);
+    g.beginPath(); P.forEach((q, k) => (k ? g.lineTo(q[0] * W, q[1] * H) : g.moveTo(q[0] * W, q[1] * H)));
+    if (P.length === 1) g.lineTo(P[0][0] * W + 0.1, P[0][1] * H);
+    g.stroke(); return;
+  }
+  g.strokeStyle = rgba(s.color, 1); g.fillStyle = g.strokeStyle;
+  if (P.length === 1) { g.beginPath(); g.arc(P[0][0] * W, P[0][1] * H, strokePx(s, P[0][2]) / 2, 0, 7); g.fill(); return; }
+  for (let i = 1; i < P.length; i++) {
+    const a = P[i - 1], b = P[i];
+    g.lineWidth = strokePx(s, (a[2] + b[2]) / 2);
+    g.beginPath(); g.moveTo(a[0] * W, a[1] * H); g.lineTo(b[0] * W, b[1] * H); g.stroke();
+  }
+}
+function drawLive() { lg.clearRect(0, 0, live.width, live.height); for (const s of S.live) drawStroke(lg, s); }
+function clearCur() { cg.clearRect(0, 0, cur.width, cur.height); }
+function drawCur(pred) {
+  clearCur();
+  if (S.cur) {
+    drawStroke(cg, S.cur);
+    // 先読み: ペン先の少し先までうすく(遅れを隠す)
+    if (pred && pred.length) drawStroke(cg, { ...S.cur, pts: [S.cur.pts[S.cur.pts.length - 1], ...pred], alpha: 90 });
+  }
+  if (S.erase) {
+    const W = cur.width, H = cur.height;
+    cg.fillStyle = "rgba(120,120,140,.25)";
+    const rr = S.erase.r * W;
+    for (const q of S.erase.pts) { cg.beginPath(); cg.arc(q[0] * W, q[1] * H, rr, 0, 7); cg.fill(); }
+  }
+}
+
+// ---------- 道具・色・太さ ----------
+function curColor() { return S.tool === "marker" ? S.color.marker : S.color.pen; }
+function widthPt(tool = S.tool) { return WIDTHS[tool][S.wk[tool]]; }
+function refreshBar() {
+  document.querySelectorAll(".tool").forEach((b) => b.classList.toggle("sel", b.dataset.tool === S.tool));
+  const c = S.tool === "eraser" ? [235, 235, 235] : curColor();
+  $("colorbtn").querySelector("i").style.background = rgba(c, 1);
+  $("colorbtn").disabled = S.tool === "eraser";
+  document.querySelectorAll(".wd").forEach((b) => {
+    const k = +b.dataset.k, i = b.querySelector("i"), d = [6, 11, 17][k];
+    i.style.width = i.style.height = d + "px";
+    i.style.background = S.tool === "eraser" ? "#ddd" : rgba(curColor(), 1);
+    b.classList.toggle("sel", S.wk[S.tool] === k);
+  });
+  $("finger").textContent = (EN ? "Finger " : "指 ") + (S.fingerDraw ? "✓" : "✕");
+  $("finger").classList.toggle("sel", S.fingerDraw);
+}
+function setTool(t, from = "button") {
+  if (t !== "eraser") S.lastTool = t;
+  S.tool = t; refreshBar(); savePref();
+  send({ t: "tool", tool: t, from });
+}
+document.querySelectorAll(".tool").forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
+document.querySelectorAll(".wd").forEach((b) => (b.onclick = () => { S.wk[S.tool] = +b.dataset.k; refreshBar(); savePref(); }));
+$("finger").onclick = () => { S.fingerDraw = !S.fingerDraw; refreshBar(); };
+$("undo").onclick = () => send({ t: "undo" });
+$("redo").onclick = () => send({ t: "redo" });
+$("prev").onclick = () => S.page && send({ t: "goto", i: S.page.i - 1 });
+$("next").onclick = () => S.page && send({ t: "goto", i: S.page.i + 1 });
+$("helpbtn").onclick = () => $("help").classList.add("open");
+$("helpclose").onclick = () => $("help").classList.remove("open");
+
+// パレット
+const hex = (c) => "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+const unhex = (h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16));
+function pickColor(c, from) {
+  S.color[S.tool === "marker" ? "marker" : "pen"] = c;
+  S.recent = [c, ...S.recent.filter((r) => r.join() !== c.join())].slice(0, 6);
+  refreshBar(); savePref(); buildPalette();
+  send({ t: "color", color: c, tool: S.tool, from });
+}
+function swatches(el, list) {
+  el.innerHTML = "";
+  for (const c of list) {
+    const b = document.createElement("button");
+    b.className = "sw" + (c.join() === curColor().join() ? " sel" : "");
+    b.innerHTML = `<i style="background:${rgba(c, 1)}"></i>`;
+    b.onclick = () => { pickColor(c, "palette"); $("pal").classList.remove("open"); };
+    el.appendChild(b);
+  }
+}
+function buildPalette() {
+  swatches($("presets"), S.tool === "marker" ? MARKER_PRESETS : PRESETS);
+  swatches($("recent"), S.recent);
+  $("custom").value = hex(curColor());
+}
+$("colorbtn").onclick = (e) => { e.stopPropagation(); buildPalette(); $("pal").classList.toggle("open"); };
+$("custom").addEventListener("change", (e) => pickColor(unhex(e.target.value), "custom"));
+document.addEventListener("pointerdown", (e) => { if (!$("pal").contains(e.target) && e.target !== $("colorbtn")) $("pal").classList.remove("open"); }, true);
+
+// ---------- ペン ----------
+const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+// 傾き: 寝かせるほど少し太く(鉛筆のように)。altitudeAngle は垂直で π/2
+function tiltBoost(e) {
+  let alt = e.altitudeAngle;
+  if (alt === undefined && (e.tiltX || e.tiltY)) {
+    const tx = Math.tan(e.tiltX * Math.PI / 180), ty = Math.tan(e.tiltY * Math.PI / 180);
+    alt = Math.atan(1 / Math.max(1e-6, Math.hypot(tx, ty)));
+  }
+  if (alt === undefined || alt <= 0) return 0;
+  return Math.max(0, Math.min(1, (1.0 - alt) / 0.7)) * 0.45;
+}
+const pressureOf = (e) => (e.pointerType === "pen" ? (e.pressure > 0 ? e.pressure : 0.5) : 0.5);
+function pt(e) {
+  const [x, y] = toPage(e);
+  const p = Math.min(1, pressureOf(e) + (S.tool === "pen" ? tiltBoost(e) : 0));
+  return [+x.toFixed(5), +y.toFixed(5), +p.toFixed(3)];
+}
+let pend = [], raf = 0, epend = [];
+function flush() {
+  raf = 0;
+  if (S.cur && pend.length) { send({ t: "s+", id: S.cur.id, pts: pend }); pend = []; }
+  if (S.erase && epend.length) { send({ t: "e+", pts: epend, r: S.erase.r }); epend = []; }
+}
+function startDraw(e) {
+  if (!S.page) return;
+  if (S.cur || S.erase) endDraw(); // 前の「離した」が届かなくても、新しく置いたら書き始める
+  const p = pt(e);
+  if (S.tool === "eraser") {
+    S.erase = { pid: e.pointerId, ptype: e.pointerType, r: widthPt("eraser") / 2 / (S.page.pw || 595), pts: [p] };
+    send({ t: "e0", pts: [p], r: S.erase.r });
+    drawCur(); return;
+  }
+  const marker = S.tool === "marker";
+  S.cur = { id: newId(), pid: e.pointerId, ptype: e.pointerType, color: curColor(), width: widthPt(), alpha: marker ? 110 : 255, marker, pts: [p] };
+  send({ t: "s0", id: S.cur.id, color: S.cur.color, width: S.cur.width, alpha: S.cur.alpha, marker, pt: p });
+  drawCur();
+}
+function moveDraw(e) {
+  const evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
+  const list = evs.length ? evs : [e];
+  if (S.erase) {
+    for (const ev of list) { const p = pt(ev); S.erase.pts.push(p); epend.push(p); }
+  } else if (S.cur) {
+    for (const ev of list) { const p = pt(ev); S.cur.pts.push(p); pend.push(p); }
+  }
+  const pred = S.cur && e.getPredictedEvents ? e.getPredictedEvents().map(pt) : null;
+  drawCur(pred);
+  if (!raf) raf = requestAnimationFrame(flush);
+}
+function endDraw() {
+  flush();
+  if (S.erase) {
+    send({ t: "e1" });
+    const e0 = S.erase; S.erase = null;
+    // 消した結果(新しい絵)が来るまで、なぞった跡は少し残す
+    setTimeout(() => { if (!S.erase) { if (S.cur) drawCur(); else clearCur(); } }, 1200);
+    S.erase = null; void e0;
+    return;
+  }
+  if (S.cur) {
+    const s = S.cur; S.cur = null;
+    delete s.pid; delete s.ptype;
+    S.live.push(s);
+    send({ t: "s1", id: s.id });
+    drawLive(); clearCur();
+  }
+}
+
+// ---------- 指: 拡大・ずらす・トン ----------
+const touches = new Map(); // pointerId -> {x, y, x0, y0, t0}
+let gesture = null;  // {d0, z0, cx0, cy0, px0, py0}
+let tapGroup = null; // {n, t0, moved}
+let lastOneTap = 0;
+function centroid() { let x = 0, y = 0; for (const t of touches.values()) { x += t.x; y += t.y; } return [x / touches.size, y / touches.size]; }
+function spread() { const a = [...touches.values()]; return a.length < 2 ? 0 : Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); }
+function startGesture() {
+  const [cx, cy] = centroid();
+  gesture = { d0: spread(), z0: S.zoom, cx0: cx, cy0: cy, px0: S.panX, py0: S.panY };
+}
+function touchDown(e) {
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: performance.now() });
+  if (!tapGroup || performance.now() - tapGroup.t0 > 250) tapGroup = { n: 0, t0: performance.now(), moved: false, max: 0 };
+  tapGroup.n++; tapGroup.max = Math.max(tapGroup.max, touches.size);
+  startGesture();
+}
+function touchMove(e) {
+  const t = touches.get(e.pointerId); if (!t) return;
+  t.x = e.clientX; t.y = e.clientY;
+  if (Math.hypot(t.x - t.x0, t.y - t.y0) > 10 && tapGroup) tapGroup.moved = true;
+  if (!gesture) return;
+  const r = vp.getBoundingClientRect();
+  const [cx, cy] = centroid();
+  let z = gesture.z0;
+  if (touches.size >= 2 && gesture.d0 > 0) z = Math.max(0.5, Math.min(12, gesture.z0 * spread() / gesture.d0));
+  // 指の真ん中の下のページの点が、指についてくるように
+  const ux = (gesture.cx0 - r.left - gesture.px0) / gesture.z0, uy = (gesture.cy0 - r.top - gesture.py0) / gesture.z0;
+  S.zoom = z; S.panX = cx - r.left - ux * z; S.panY = cy - r.top - uy * z;
+  applyView();
+}
+function touchUp(e) {
+  touches.delete(e.pointerId);
+  if (touches.size) { startGesture(); return; }
+  gesture = null;
+  const g = tapGroup; tapGroup = null;
+  if (g && !g.moved && performance.now() - g.t0 < 300) {
+    if (g.max === 2) { send({ t: "undo" }); toast("元に戻す", 700); return; }
+    if (g.max === 3) { send({ t: "redo" }); toast("やり直す", 700); return; }
+    if (g.max === 1) {
+      const now = performance.now();
+      if (now - lastOneTap < 350) { lastOneTap = 0; setTool(S.tool === "eraser" ? S.lastTool : "eraser", "double_tap"); toast(S.tool === "eraser" ? "消しゴム" : (S.tool === "marker" ? "マーカー" : "ペン"), 700); return; }
+      lastOneTap = now;
+    }
+  }
+  sizeCanvases(); requestTile();
+}
+
+// ---------- 入力の振り分け ----------
+const hover = $("hover");
+function showHover(e) {
+  if (!S.page) return;
+  const [x, y] = toPage(e);
+  const d = (S.tool === "eraser" ? widthPt("eraser") : S.tool === "marker" ? widthPt() : widthPt() * 1.05) / (S.page.pw || 595) * S.baseW;
+  const dd = Math.max(4, d);
+  Object.assign(hover.style, { display: "block", width: dd + "px", height: dd + "px", left: x * S.baseW - dd / 2 + "px", top: y * S.baseH - dd / 2 + "px",
+    background: S.tool === "eraser" ? "rgba(255,255,255,.5)" : rgba(curColor(), S.tool === "marker" ? 0.35 : 0.6) });
+}
+vp.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  hover.style.display = "none";
+  const drawing = e.pointerType === "pen" || e.pointerType === "mouse" || (e.pointerType === "touch" && S.fingerDraw && touches.size === 0 && !gesture);
+  if (drawing && !(e.pointerType === "touch" && touches.size)) {
+    if (e.pointerType === "pen") { touches.clear(); gesture = null; tapGroup = null; } // 置いた手のひらは無視
+    try { vp.setPointerCapture(e.pointerId); } catch {}
+    startDraw(e); return;
+  }
+  if (e.pointerType === "touch") {
+    // 手のひら: ペンで書いている間と、離してすぐは指を無視する
+    const penBusy = (S.cur && S.cur.ptype === "pen") || (S.erase && S.erase.ptype === "pen");
+    if (penBusy || performance.now() - penUpAt < 400) return;
+    // 指で書いている途中に2本目が来たら、書くのをやめて拡大へ
+    if (S.cur && S.cur.ptype === "touch") { S.cur = null; clearCur(); }
+    if (S.erase && S.erase.ptype === "touch") { S.erase = null; clearCur(); }
+    try { vp.setPointerCapture(e.pointerId); } catch {}
+    touchDown(e);
+  }
+});
+vp.addEventListener("pointermove", (e) => {
+  if ((S.cur && S.cur.pid === e.pointerId) || (S.erase && S.erase.pid === e.pointerId)) { e.preventDefault(); moveDraw(e); return; }
+  if (e.pointerType === "touch") { touchMove(e); return; }
+  // ペン先を近づけただけ(押していない): 太さの印(ホバーに対応した iPad と Pencil で)
+  if (e.pointerType === "pen" && e.buttons === 0) showHover(e);
+});
+let penUpAt = 0;
+const up = (e) => {
+  if ((S.cur && S.cur.pid === e.pointerId) || (S.erase && S.erase.pid === e.pointerId)) { if (e.pointerType === "pen") penUpAt = performance.now(); endDraw(); return; }
+  if (e.pointerType === "touch") touchUp(e);
+};
+vp.addEventListener("pointerup", up);
+vp.addEventListener("pointercancel", up);
+vp.addEventListener("pointerleave", (e) => { if (e.pointerType === "pen") hover.style.display = "none"; });
+// iPad の手書き入力(スクリブル)・長押しの虫めがね・ダブルタップの拡大を止める(止めないとペンの線を取られる)
+for (const k of ["touchstart", "touchmove", "touchend"]) vp.addEventListener(k, (e) => e.preventDefault(), { passive: false });
+document.addEventListener("gesturestart", (e) => e.preventDefault());
+document.addEventListener("dblclick", (e) => e.preventDefault());
+
+refreshBar();
+if (!RTC) connect();
+else {
+  $("pair-go").addEventListener("click", () => pairStart());
+  // ホーム画面から開いたとき(standalone)は「ホーム画面に追加」の案内は要らない
+  if (navigator.standalone || matchMedia("(display-mode: standalone)").matches) $("pair-home").style.display = "none";
+  // 一度開けば、ネットにつながらなくても開けるように
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+  loadScript("rtclink.js").then(() => {
+    // PC の QR を iPad のカメラ(標準のカメラ)で読んで開いたときは、そのままつなぐ
+    if (hashOffer()) pairStart(); else pairOpen("");
+  }).catch(() => toast("読み込めませんでした。ページを開き直してください", 0));
+  addEventListener("hashchange", () => { if (window.RtcLink && hashOffer() && !(link && link.open)) pairStart(); });
+}
+window.__pad = S; // テスト用
+})();
+</script>
 </body>
 </html>

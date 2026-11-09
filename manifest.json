@@ -1,1 +1,2 @@
-{ "name": "iPad 直接接続テスト", "short_name": "接続テスト", "start_url": "./", "display": "standalone", "background_color": "#1e1f22", "theme_color": "#1e1f22" }
+{ "name": "pdfeditor 手書き", "short_name": "pdfeditor", "start_url": "./", "display": "standalone", "background_color": "#3b3e44", "theme_color": "#232529",
+  "icons": [{ "src": "icon.png", "sizes": "256x256", "type": "image/png" }] }

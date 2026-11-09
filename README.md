@@ -1,10 +1,13 @@
 # pdfeditor-pad
 
-pdfeditor の「iPad 直接接続テスト」のページです。パソコンと iPad が、外のサーバーを通さずに同じ Wi-Fi の中だけで直接つながるかを確かめます。
+pdfeditor の iPad 手書きページです（https://toyan0326.github.io/pdfeditor-pad/）。
 
-- 接続には WebRTC を使います。STUN・TURN などの外のサーバーは使いません（`iceServers: []`）。
-- 接続の情報（住所・合言葉・暗号の鍵の指紋）は、QR コードをカメラで読み合って交換します。
-- つながった後のデータは DTLS で暗号化され、2 台の間を直接流れます。
-- 一度開けば、ホーム画面に追加してネットなしでも開けます（Service Worker）。
+- PC の pdfeditor で「iPad で書く」を押すと出る QR を読むと開き、Apple Pencil で書いた線が PC の PDF に注釈として入ります。
+- PC と iPad は WebRTC で直接つながります。STUN・TURN などの外のサーバーは使いません。
+  接続の情報（住所・合言葉・暗号の鍵の指紋）は QR を読み合って交換し、データは DTLS で暗号化されて 2 台の間だけを流れます。
+- ホーム画面に追加すると、ネットにつながらなくても開けます（Service Worker）。
+- `test/` は接続だけを確かめるテストのページです。
+
+このリポジトリの中身は、pdfeditor（非公開）の `tools/build-pad.sh` で作った `web/pad` をそのままコピーしたものです。
 
 使っている部品: [jsQR](https://github.com/cozmo/jsQR)（Apache-2.0、`vendor/jsQR.LICENSE`）、[qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator)（MIT、ファイル冒頭に記載）
