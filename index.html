@@ -97,6 +97,7 @@
   <div id="pair-qr"></div>
   <button id="pair-go">カメラで PC の QR を読む</button>
   <p class="small">PC の pdfeditor で「iPad で書く」を押すと QR が出ます。外のサーバーは通さず、同じ Wi-Fi の中で PC と直接つながります。</p>
+  <p class="small" id="pad-ver"></p>
   <p class="small" id="pair-home">共有ボタン →「ホーム画面に追加」しておくと、次からはネットにつながらなくても開けます。</p>
 </div></div>
 <div id="help"><div>
@@ -179,6 +180,7 @@ const toast = (() => { let tm = 0; return (t, ms = 1800) => { const el = $("toas
 // 合言葉(k)が付いていれば、以前のつなぎ方(PC のサーバーに WebSocket)。
 // 無ければ直接つなぐ(WebRTC。PC の QR をカメラで読み、自分の QR を PC のカメラに見せる。rtclink.js)
 const RTC = !TOKEN;
+const PAD_VER = "87c835b (2026-11-09)"; // tools/build-pad.sh が版に置き換える
 let ws = null, link = null;
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws?k=${encodeURIComponent(TOKEN)}&role=pad`);
@@ -626,8 +628,20 @@ else {
   $("pair-go").addEventListener("click", () => pairStart());
   // ホーム画面から開いたとき(standalone)は「ホーム画面に追加」の案内は要らない
   if (navigator.standalone || matchMedia("(display-mode: standalone)").matches) $("pair-home").style.display = "none";
-  // 一度開けば、ネットにつながらなくても開けるように
-  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+  $("pad-ver").textContent = "pdfeditor-pad " + PAD_VER;
+  // 一度開けば、ネットにつながらなくても開けるように。新しい版が出ていたら、つないでいないときに読み込み直す
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+    const had = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      reg.update().catch(() => {});
+      addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
+    }).catch(() => {});
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!had || reloading || (link && link.open) || pair.pc || pair.busy) return;
+      reloading = true; location.reload();
+    });
+  }
   loadScript("rtclink.js").then(() => {
     // PC の QR を iPad のカメラ(標準のカメラ)で読んで開いたときは、そのままつなぐ
     if (hashOffer()) pairStart(); else pairOpen("");

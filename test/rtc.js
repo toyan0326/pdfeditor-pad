@@ -49,7 +49,8 @@ function pack(sdp) {
   return ["R1", SETUP[setup] || "a", ufrag, pwd, b64u(hexBytes(fp[2])), cands.join(",")].join("|");
 }
 function parse(code) {
-  const p = String(code).trim().split("|");
+  const s = String(code).trim(); // PC のアプリの QR は「ページの URL#R1|…」
+  const p = s.slice(Math.max(0, s.indexOf("R1|"))).split("|");
   if (p.length !== 6 || p[0] !== "R1") return null;
   return { setup: SETUP_R[p[1]], ufrag: p[2], pwd: p[3], fp: bytesHex(unb64u(p[4])), cands: p[5] ? p[5].split(",") : [] };
 }
