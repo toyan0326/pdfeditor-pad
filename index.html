@@ -63,6 +63,11 @@
   #pair-qr svg { width:100%; height:auto; display:block; }
   #pair button { font:inherit; color:#fff; background:#4b8bf5; border:0; border-radius:10px; padding:12px 22px; margin-top:12px; }
   #pair .small { font-size:13px; }
+  #pair-num { display:none; margin:10px 0; }
+  #pair-num.on { display:block; }
+  #pair-num-v { font-size:64px; font-weight:700; letter-spacing:2px; font-variant-numeric:tabular-nums; color:#fff; margin:6px 0; word-break:break-all; }
+  #pair-num-v.long { font-size:40px; }
+  #pair .sub { background:#3a3d44; }
   #pair button.link { background:none; color:#8bb4ff; padding:0 4px; margin:0; text-decoration:underline; font-size:13px; }
   #pair button.link:disabled { color:var(--sub); text-decoration:none; }
 </style>
@@ -97,8 +102,14 @@
   <p id="pair-msg"></p>
   <video id="pair-cam" playsinline muted></video>
   <div id="pair-qr"></div>
+  <div id="pair-num">
+    <p>PC の pdfeditor で「iPad で書く」を押し、この番号を入れてください</p>
+    <div id="pair-num-v"></div>
+    <button id="pair-renum" class="sub">番号を作り直す</button>
+  </div>
   <button id="pair-go">カメラで PC の QR を読む</button>
-  <p class="small">PC の pdfeditor で「iPad で書く」を押すと QR が出ます。外のサーバーは通さず、同じ Wi-Fi の中で PC と直接つながります。</p>
+  <p class="small" id="pair-qr-note" style="display:none"><span class="t">住所が変わったとき（ちがう Wi-Fi など）は、QR でつなぎ直してください。</span> <button id="pair-forget" class="link">この PC を忘れる</button></p>
+  <p class="small" id="pair-qr-help">PC の pdfeditor で「iPad で書く」を押すと QR が出ます。外のサーバーは通さず、同じ Wi-Fi の中で PC と直接つながります。</p>
   <p class="small"><span id="pad-ver"></span> <button id="pad-update" class="link">更新する</button></p>
   <p class="small" id="pad-update-note">このページは iPad に取っておいたものを使い、自動では新しくしません。新しい版にするときだけ「更新する」を押してください（そのときだけ GitHub につなぎます）。</p>
   <p class="small" id="pair-home">共有ボタン →「ホーム画面に追加」しておくと、次からはネットにつながらなくても開けます。</p>
@@ -141,6 +152,14 @@ const T = {
   "カメラが使えません。設定 → Safari → カメラ で許可してください": "The camera is not available. Allow it in Settings → Safari → Camera.",
   "この QR は PC の QR ではありません": "This is not the PC's QR code",
   "更新する": "Update", "更新しています…": "Updating…",
+  "PC の pdfeditor で「iPad で書く」を押し、この番号を入れてください": "In pdfeditor on the PC, press “Write on iPad” and enter this number",
+  "番号を作り直す": "Make a new number", "QR でつなぐ": "Connect with a QR code",
+  "住所が変わったとき（ちがう Wi-Fi など）は、QR でつなぎ直してください。": "If the address changed (for example, another Wi-Fi), connect again with a QR code.",
+  "この PC を忘れる": "Forget this PC",
+  "番号を作っています…": "Making a number…",
+  "PC から番号でつなぐのを待っています": "Waiting for the PC to connect with the number",
+  "PC と切れました。PC にこの番号を入れると、またつながります": "Disconnected from the PC. Enter this number on the PC to connect again.",
+  "番号を作れませんでした。QR でつないでください": "Could not make a number. Please connect with a QR code.",
   "更新できませんでした（ネットにつながっているか確かめてください）": "Couldn't update (check the internet connection)",
   "このページは iPad に取っておいたものを使い、自動では新しくしません。新しい版にするときだけ「更新する」を押してください（そのときだけ GitHub につなぎます）。": "This page uses the copy saved on the iPad and never updates by itself. Press “Update” only when you want the new version (that is the only time it contacts GitHub).",
 };
@@ -149,7 +168,7 @@ if (EN) {
   document.documentElement.lang = "en";
   document.title = tr(document.title);
   for (const el of document.querySelectorAll("[aria-label]")) el.setAttribute("aria-label", tr(el.getAttribute("aria-label")));
-  for (const el of document.querySelectorAll("h4, #pair h2, #pair button, #pair p.small:not(:has(button))")) el.textContent = tr(el.textContent);
+  for (const el of document.querySelectorAll("h4, #pair h2, #pair button, #pair p.small:not(:has(button)), #pair-num p, #pair .t")) el.textContent = tr(el.textContent);
   $("help").firstElementChild.innerHTML = `<b>Apple Pencil</b>: write. Pressure changes the width; tilting makes it a little wider. Hovering the tip shows the width (on iPads that support it).<br>
   <b>Two fingers</b>: pinch to zoom and pan. <b>Two-finger tap</b>: undo. <b>Three-finger tap</b>: redo.<br>
   <b>One-finger double tap</b>: pen ⇄ eraser (instead of the Pencil double tap, which Safari doesn't receive).<br>
@@ -186,7 +205,7 @@ const toast = (() => { let tm = 0; return (t, ms = 1800) => { const el = $("toas
 // 合言葉(k)が付いていれば、以前のつなぎ方(PC のサーバーに WebSocket)。
 // 無ければ直接つなぐ(WebRTC。PC の QR をカメラで読み、自分の QR を PC のカメラに見せる。rtclink.js)
 const RTC = !TOKEN;
-const PAD_VER = "2f4bb5e (2026-11-09)"; // tools/build-pad.sh が版に置き換える
+const PAD_VER = "5735554 (2026-11-09)"; // tools/build-pad.sh が版に置き換える
 const PAD_FILES = ["./", "index.html", "rtclink.js", "vendor/qrcode.js", "vendor/jsQR.js", "manifest.json", "icon.png"];
 let ws = null, link = null;
 function connect() {
@@ -229,6 +248,8 @@ async function pairStart() {
   try {
     pairOpen("準備しています…");
     $("pair-go").style.display = "none";
+    $("pair-num").classList.remove("on"); showQrNote(false);
+    if (pair.pc) { try { pair.pc.close(); } catch {} pair.pc = null; }
     await Promise.all([loadScript("vendor/jsQR.js"), loadScript("vendor/qrcode.js")]);
     pairMsg("カメラの使用を許可してください");
     // カメラが動いている間だけ、Safari は iPad の本当の住所を出す(PC から声をかけるのに要る)
@@ -247,11 +268,66 @@ async function pairStart() {
     });
   } finally { pair.busy = false; }
 }
+// ---- 2 回目から番号でつなぐ ----
+// この iPad の鍵と合言葉を覚え(IndexedDB)、つないだ PC の指紋と合言葉も覚える(localStorage)。
+// 次からは PC の QR を読まずに、覚えた PC あての返事を作って待ち、自分の住所の「番号」を見せる。
+// PC でその番号を打つと PC から声がかかり、鍵の指紋が合えばつながる(ほかの機械はなりすませない)
+const PAIR_KEY = "pdfeditor-pad.pair";
+const loadPair = () => { try { const p = JSON.parse(localStorage.getItem(PAIR_KEY) || "null"); return p && p.fp && p.ufrag && p.pwd ? p : null; } catch { return null; } };
+const savePair = (p) => { try { if (p) localStorage.setItem(PAIR_KEY, JSON.stringify(p)); else localStorage.removeItem(PAIR_KEY); } catch {} };
+let myId;
+async function getId() {
+  if (myId !== undefined) return myId;
+  try { myId = await RtcLink.identity("pdfeditor-pad"); } catch (e) { console.warn(e); myId = null; }
+  if (myId && myId.fresh) savePair(null);
+  return myId;
+}
+function showQrNote(on) { const n = !!(on && loadPair()); $("pair-qr-note").style.display = n ? "" : "none"; $("pair-qr-help").style.display = n ? "none" : ""; }
+async function numberStart(msg) {
+  if (pair.busy) return;
+  const saved = loadPair(), id = await getId();
+  if (!saved || !id) { pairOpen(""); return; }
+  pair.busy = true;
+  let cam = null;
+  try {
+    pairOpen(msg || "番号を作っています…");
+    $("pair-go").textContent = tr("QR でつなぐ");
+    $("pair-num").classList.remove("on");
+    // カメラを一瞬使うと、Safari は本当の住所を出す(番号に要る)。使えなくても、前の住所のままならポートだけで足りる
+    try { cam = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); } catch {}
+    if (pair.pc) try { pair.pc.close(); } catch {}
+    const a = await RtcLink.answer({ fp: saved.fp, ufrag: saved.ufrag, pwd: saved.pwd, setup: "actpass", cands: [] }, id);
+    pair.pc = a.pc;
+    const c = RtcLink.mainCand(a.info);
+    if (!c) throw new Error("no address");
+    const ip = RtcLink.isV4(c.ip) ? c.ip : null;
+    const num = RtcLink.numberFor(ip, c.port, saved.lastIp);
+    $("pair-num-v").textContent = num;
+    $("pair-num-v").classList.toggle("long", num.length > 8);
+    $("pair-num").classList.add("on");
+    if (!msg) pairMsg("PC から番号でつなぐのを待っています");
+    showQrNote(true);
+    waitChannel(a, { ...saved, lastIp: ip || saved.lastIp }, true);
+    // 待っている間に通り道がだめになったら(しばらく使わなかった など)、番号を作り直す
+    const t0 = Date.now();
+    a.pc.addEventListener("iceconnectionstatechange", () => {
+      if (pair.pc === a.pc && a.pc.iceConnectionState === "failed" && !(link && link.open) && Date.now() - t0 > 5000) numberStart();
+    });
+  } catch (e) {
+    console.warn(e);
+    pairOpen("番号を作れませんでした。QR でつないでください");
+  } finally {
+    if (cam) cam.getTracks().forEach((t) => t.stop());
+    pair.busy = false;
+  }
+}
 async function answer(offer) {
   if (pair.pc) try { pair.pc.close(); } catch {}
-  const a = await RtcLink.answer(offer);
+  const id = await getId();
+  const a = await RtcLink.answer(offer, id);
   pair.pc = a.pc;
   pairStopCam();
+  $("pair-num").classList.remove("on");
   // 使った申し込みは URL から消す(読み込み直しで古い QR を使わない)
   try { history.replaceState(null, "", location.pathname + location.search); } catch {}
   const q = qrcode(0, "M"); q.addData(a.code, "Byte"); q.make();
@@ -260,11 +336,19 @@ async function answer(offer) {
   pairMsg("この QR を、PC のカメラに向けてください");
   clearTimeout(pair.timer);
   pair.timer = setTimeout(() => { if (!(link && link.open)) { pairOpen("つながりませんでした。PC と iPad が同じ Wi-Fi か確かめて、PC で「QR を作り直す」を押してから読み直してください"); } }, 45000);
+  // つながったら PC を覚える(鍵を覚えられないときは覚えない)
+  const c = RtcLink.mainCand(a.info);
+  waitChannel(a, id ? { ...RtcLink.peerOf(offer), lastIp: c && RtcLink.isV4(c.ip) ? c.ip : null } : null, false);
+}
+// つながるのを待つ。learn: つながったら覚える PC の情報。byNumber: 番号で待っている(切れたら新しい番号を出す)
+function waitChannel(a, learn, byNumber) {
   const pc = a.pc;
   a.channel.then((dc) => {
     const ready = () => {
       if (pair.pc !== pc) return;
       clearTimeout(pair.timer);
+      if (learn) savePair({ fp: learn.fp, ufrag: learn.ufrag, pwd: learn.pwd, lastIp: learn.lastIp || null, at: Date.now() });
+      $("pair-num").classList.remove("on");
       link = RtcLink.channel(dc, onMsg);
       S.connected = true; $("dot").classList.add("on");
       $("pair").classList.remove("open");
@@ -275,7 +359,8 @@ async function answer(offer) {
     const lost = () => {
       if (pair.pc !== pc) return;
       link = null; S.connected = false; $("dot").classList.remove("on");
-      pairOpen("PC と切れました。PC の QR をもう一度読んでください");
+      if (loadPair()) { pair.pc = null; numberStart("PC と切れました。PC にこの番号を入れると、またつながります"); }
+      else pairOpen("PC と切れました。PC の QR をもう一度読んでください");
     };
     dc.addEventListener("close", lost);
     pc.addEventListener("connectionstatechange", () => { if (pc.connectionState === "failed" || pc.connectionState === "closed") lost(); });
@@ -633,6 +718,8 @@ refreshBar();
 if (!RTC) connect();
 else {
   $("pair-go").addEventListener("click", () => pairStart());
+  $("pair-renum").addEventListener("click", () => numberStart());
+  $("pair-forget").addEventListener("click", () => { savePair(null); if (pair.pc) { try { pair.pc.close(); } catch {} pair.pc = null; } $("pair-go").textContent = tr("カメラで PC の QR を読む"); pairOpen(""); showQrNote(false); });
   // ホーム画面から開いたとき(standalone)は「ホーム画面に追加」の案内は要らない
   if (navigator.standalone || matchMedia("(display-mode: standalone)").matches) $("pair-home").style.display = "none";
   $("pad-ver").textContent = "pdfeditor-pad " + PAD_VER;
@@ -661,9 +748,14 @@ else {
   });
   loadScript("rtclink.js").then(() => {
     // PC の QR を iPad のカメラ(標準のカメラ)で読んで開いたときは、そのままつなぐ
-    if (hashOffer()) pairStart(); else pairOpen("");
+    // 覚えた PC があれば番号を出して待つ(QR でつなぐこともできる)
+    if (hashOffer()) pairStart(); else if (loadPair()) numberStart(); else pairOpen("");
   }).catch(() => toast("読み込めませんでした。ページを開き直してください", 0));
   addEventListener("hashchange", () => { if (window.RtcLink && hashOffer() && !(link && link.open)) pairStart(); });
+  // ほかのアプリから戻ってきたとき、番号で待っていたら番号を作り直す(裏にいる間に iPad が通り道を閉じることがある)
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && window.RtcLink && !(link && link.open) && $("pair-num").classList.contains("on") && !pair.busy) numberStart();
+  });
 }
 window.__pad = S; // テスト用
 })();
