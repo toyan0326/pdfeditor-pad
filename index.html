@@ -205,7 +205,7 @@ const toast = (() => { let tm = 0; return (t, ms = 1800) => { const el = $("toas
 // 合言葉(k)が付いていれば、以前のつなぎ方(PC のサーバーに WebSocket)。
 // 無ければ直接つなぐ(WebRTC。PC の QR をカメラで読み、自分の QR を PC のカメラに見せる。rtclink.js)
 const RTC = !TOKEN;
-const PAD_VER = "5735554 (2026-11-09)"; // tools/build-pad.sh が版に置き換える
+const PAD_VER = "bb00c93 (2026-11-09)"; // tools/build-pad.sh が版に置き換える
 const PAD_FILES = ["./", "index.html", "rtclink.js", "vendor/qrcode.js", "vendor/jsQR.js", "manifest.json", "icon.png"];
 let ws = null, link = null;
 function connect() {
@@ -450,26 +450,19 @@ function requestTile(now) {
 }
 
 // ---------- 線を描く(PC と同じ太さの式) ----------
-const pf = (p) => 0.45 + 0.85 * Math.sqrt(Math.max(0, Math.min(1, p)));
-function strokePx(s, p) { const W = live.width, pw = (S.page && S.page.pw) || 595; return Math.max(0.7, (s.marker ? s.width : s.width * pf(p)) / pw * W); }
+// 太さは一定(PC に入る線と同じ。筆圧では変えない)
+function strokePx(s) { const W = live.width, pw = (S.page && S.page.pw) || 595; return Math.max(0.7, s.width / pw * W); }
 const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 function drawStroke(g, s) {
   const W = g.canvas.width, H = g.canvas.height, P = s.pts;
+  // 1 本を 1 回でなめらかに引く(太さ一定・端と角は丸く。重なった所も濃くならない)。PC に入る線と同じ形
   g.lineCap = "round"; g.lineJoin = "round";
-  if (s.marker) {
-    // マーカー: 1本を1回で塗る(重なった所が濃くならない)
-    g.strokeStyle = rgba(s.color, s.alpha / 255); g.fillStyle = g.strokeStyle; g.lineWidth = strokePx(s, 0.5);
-    g.beginPath(); P.forEach((q, k) => (k ? g.lineTo(q[0] * W, q[1] * H) : g.moveTo(q[0] * W, q[1] * H)));
-    if (P.length === 1) g.lineTo(P[0][0] * W + 0.1, P[0][1] * H);
-    g.stroke(); return;
-  }
-  g.strokeStyle = rgba(s.color, 1); g.fillStyle = g.strokeStyle;
-  if (P.length === 1) { g.beginPath(); g.arc(P[0][0] * W, P[0][1] * H, strokePx(s, P[0][2]) / 2, 0, 7); g.fill(); return; }
-  for (let i = 1; i < P.length; i++) {
-    const a = P[i - 1], b = P[i];
-    g.lineWidth = strokePx(s, (a[2] + b[2]) / 2);
-    g.beginPath(); g.moveTo(a[0] * W, a[1] * H); g.lineTo(b[0] * W, b[1] * H); g.stroke();
-  }
+  g.strokeStyle = rgba(s.color, s.marker ? s.alpha / 255 : (s.alpha ?? 255) / 255); g.lineWidth = strokePx(s);
+  g.beginPath(); g.moveTo(P[0][0] * W, P[0][1] * H);
+  if (P.length === 1) g.lineTo(P[0][0] * W + 0.1, P[0][1] * H);
+  for (let i = 1; i < P.length - 1; i++) g.quadraticCurveTo(P[i][0] * W, P[i][1] * H, (P[i][0] + P[i + 1][0]) / 2 * W, (P[i][1] + P[i + 1][1]) / 2 * H);
+  if (P.length > 1) g.lineTo(P[P.length - 1][0] * W, P[P.length - 1][1] * H);
+  g.stroke();
 }
 function drawLive() { lg.clearRect(0, 0, live.width, live.height); for (const s of S.live) drawStroke(lg, s); }
 function clearCur() { cg.clearRect(0, 0, cur.width, cur.height); }
@@ -671,8 +664,11 @@ function showHover(e) {
   if (!S.page) return;
   const [x, y] = toPage(e);
   const d = (S.tool === "eraser" ? widthPt("eraser") : S.tool === "marker" ? widthPt() : widthPt() * 1.05) / (S.page.pw || 595) * S.baseW;
-  const dd = Math.max(4, d);
+  // 印は拡大しても画面の上で同じ大きさ(用紙といっしょに拡大される #stage の中なので、拡大率で割る)。
+  // 書く線の太さ(用紙の上の pt)は変えない
+  const z = S.zoom || 1, dd = Math.max(4, d) / z;
   Object.assign(hover.style, { display: "block", width: dd + "px", height: dd + "px", left: x * S.baseW - dd / 2 + "px", top: y * S.baseH - dd / 2 + "px",
+    borderWidth: (1.5 / z) + "px", boxShadow: `0 0 0 ${1 / z}px #fff9`,
     background: S.tool === "eraser" ? "rgba(255,255,255,.5)" : rgba(curColor(), S.tool === "marker" ? 0.35 : 0.6) });
 }
 vp.addEventListener("pointerdown", (e) => {
