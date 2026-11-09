@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>iPad 直接接続テスト</title>
+<style>
+  :root { --bg:#1e1f22; --panel:#2a2c30; --line:#3a3d42; --text:#e8e8ea; --dim:#9a9ca3; --accent:#4c8dff; --ok:#3fbf6f; --ng:#e5534b; --warn:#d9a33b; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  .sub { color: var(--dim); font-size: 13px; margin: 0 0 14px; }
+  .roles { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; cursor: pointer; }
+  button.big { padding: 18px 14px; font-size: 17px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color:#fff; }
+  button:disabled { opacity:.5; cursor: default; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 12px 0; }
+  .step { font-size: 17px; font-weight: 600; margin: 0 0 8px; }
+  .hint { color: var(--dim); font-size: 13px; margin: 6px 0 0; }
+  #badge { display:inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; background:#444; }
+  #badge.ok { background: var(--ok); color:#fff; } #badge.ng { background: var(--ng); color:#fff; } #badge.wait { background: var(--warn); color:#111; }
+  .media { display:flex; gap:14px; flex-wrap: wrap; align-items:flex-start; justify-content:center; }
+  video { width: 280px; max-width: 100%; border-radius: 8px; background:#000; }
+  video.mirror { transform: scaleX(-1); }
+  #qr { background:#fff; border-radius: 8px; padding: 10px; line-height:0; }
+  #qr svg, #qr img { width: min(78vw, 340px); height: auto; display:block; }
+  #qr.small svg, #qr.small img { width: 260px; }
+  #pad { width:100%; height: 46vh; min-height: 260px; background:#fff; border-radius: 8px; touch-action: none; display:block; }
+  .row { display:flex; gap:8px; flex-wrap: wrap; align-items:center; }
+  .kv { display:grid; grid-template-columns: max-content 1fr; gap: 2px 12px; font-size: 13px; }
+  .kv b { color: var(--dim); font-weight: 500; }
+  details { margin-top: 12px; } summary { cursor:pointer; color: var(--dim); }
+  pre#log { white-space: pre-wrap; word-break: break-all; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; max-height: 260px; overflow:auto; background:#16171a; padding:8px; border-radius:6px; }
+  textarea { width:100%; font: 12px ui-monospace, Menlo, Consolas, monospace; background:#16171a; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px; }
+  .hide { display:none !important; }
+  .diag li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>iPad 直接接続テスト <span id="badge">未接続</span></h1>
+  <p class="sub">パソコンと iPad が、外のサーバーを通さずに社内の Wi-Fi の中だけで直接つながるかを確かめます。接続の情報は QR コードで読み合います。</p>
+
+  <section id="choose" class="card">
+    <p class="step">どちらで開いていますか？</p>
+    <div class="roles">
+      <button class="big" id="go-pc">💻 このパソコンで始める</button>
+      <button class="big" id="go-pad">📱 この iPad で始める</button>
+    </div>
+    <div id="open-on-pad" class="hide" style="margin-top:14px">
+      <p class="hint">iPad では、このページを開いてください（iPad のカメラでこの QR を読むと開けます）<br><span id="pad-url"></span><br>一度開いたら、共有ボタン →「ホーム画面に追加」しておくと、次からはネットにつながらなくても開けます。</p>
+      <div class="media"><div id="url-qr" class="small" style="background:#fff;border-radius:8px;padding:8px;line-height:0"></div></div>
+    </div>
+  </section>
+
+  <section id="run" class="card hide">
+    <p class="step" id="step"></p>
+    <p class="hint" id="step-hint"></p>
+    <div class="media" style="margin-top:10px">
+      <video id="video" playsinline muted class="hide"></video>
+      <div id="qr" class="hide"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="retry">最初からやり直す</button>
+    </div>
+  </section>
+
+  <section id="done" class="card hide">
+    <p class="step">✅ つながりました</p>
+    <div class="kv" id="pair"></div>
+    <p class="hint">下の白い所に書くと、もう片方の画面にすぐ映ります。</p>
+    <canvas id="pad"></canvas>
+    <div class="row" style="margin-top:8px"><button id="clear">消す</button></div>
+  </section>
+
+  <section id="fail" class="card hide">
+    <p class="step">❌ つながりませんでした</p>
+    <ul class="diag" id="diag"></ul>
+    <p class="hint">この画面の写真か、下の「くわしい記録」を送ってもらえれば原因を調べます。</p>
+  </section>
+
+  <details id="more">
+    <summary>くわしい記録</summary>
+    <div class="kv" id="ips" style="margin:8px 0"></div>
+    <pre id="log"></pre>
+    <p class="hint">カメラが使えないときは、相手に出たコードをここに貼っても進められます。</p>
+    <textarea id="code-out" rows="3" readonly placeholder="自分のコード"></textarea>
+    <textarea id="code-in" rows="3" placeholder="相手のコードを貼る"></textarea>
+    <div class="row"><button id="code-go">貼ったコードで進める</button></div>
+  </details>
+</main>
+<script src="vendor/qrcode.js"></script>
+<script src="vendor/jsQR.js"></script>
+<script src="rtc.js"></script>
+</body>
+</html>
