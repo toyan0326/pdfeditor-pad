@@ -63,6 +63,8 @@
   #pair-qr svg { width:100%; height:auto; display:block; }
   #pair button { font:inherit; color:#fff; background:#4b8bf5; border:0; border-radius:10px; padding:12px 22px; margin-top:12px; }
   #pair .small { font-size:13px; }
+  #pair button.link { background:none; color:#8bb4ff; padding:0 4px; margin:0; text-decoration:underline; font-size:13px; }
+  #pair button.link:disabled { color:var(--sub); text-decoration:none; }
 </style>
 </head>
 <body>
@@ -97,7 +99,8 @@
   <div id="pair-qr"></div>
   <button id="pair-go">カメラで PC の QR を読む</button>
   <p class="small">PC の pdfeditor で「iPad で書く」を押すと QR が出ます。外のサーバーは通さず、同じ Wi-Fi の中で PC と直接つながります。</p>
-  <p class="small" id="pad-ver"></p>
+  <p class="small"><span id="pad-ver"></span> <button id="pad-update" class="link">更新する</button></p>
+  <p class="small" id="pad-update-note">このページは iPad に取っておいたものを使い、自動では新しくしません。新しい版にするときだけ「更新する」を押してください（そのときだけ GitHub につなぎます）。</p>
   <p class="small" id="pair-home">共有ボタン →「ホーム画面に追加」しておくと、次からはネットにつながらなくても開けます。</p>
 </div></div>
 <div id="help"><div>
@@ -137,13 +140,16 @@ const T = {
   "PC と切れました。PC の QR をもう一度読んでください": "Disconnected from the PC. Scan the PC's QR code again.",
   "カメラが使えません。設定 → Safari → カメラ で許可してください": "The camera is not available. Allow it in Settings → Safari → Camera.",
   "この QR は PC の QR ではありません": "This is not the PC's QR code",
+  "更新する": "Update", "更新しています…": "Updating…",
+  "更新できませんでした（ネットにつながっているか確かめてください）": "Couldn't update (check the internet connection)",
+  "このページは iPad に取っておいたものを使い、自動では新しくしません。新しい版にするときだけ「更新する」を押してください（そのときだけ GitHub につなぎます）。": "This page uses the copy saved on the iPad and never updates by itself. Press “Update” only when you want the new version (that is the only time it contacts GitHub).",
 };
 const tr = (s) => (EN && T[s]) || s;
 if (EN) {
   document.documentElement.lang = "en";
   document.title = tr(document.title);
   for (const el of document.querySelectorAll("[aria-label]")) el.setAttribute("aria-label", tr(el.getAttribute("aria-label")));
-  for (const el of document.querySelectorAll("h4, #pair h2, #pair button, #pair p.small")) el.textContent = tr(el.textContent);
+  for (const el of document.querySelectorAll("h4, #pair h2, #pair button, #pair p.small:not(:has(button))")) el.textContent = tr(el.textContent);
   $("help").firstElementChild.innerHTML = `<b>Apple Pencil</b>: write. Pressure changes the width; tilting makes it a little wider. Hovering the tip shows the width (on iPads that support it).<br>
   <b>Two fingers</b>: pinch to zoom and pan. <b>Two-finger tap</b>: undo. <b>Three-finger tap</b>: redo.<br>
   <b>One-finger double tap</b>: pen ⇄ eraser (instead of the Pencil double tap, which Safari doesn't receive).<br>
@@ -180,7 +186,8 @@ const toast = (() => { let tm = 0; return (t, ms = 1800) => { const el = $("toas
 // 合言葉(k)が付いていれば、以前のつなぎ方(PC のサーバーに WebSocket)。
 // 無ければ直接つなぐ(WebRTC。PC の QR をカメラで読み、自分の QR を PC のカメラに見せる。rtclink.js)
 const RTC = !TOKEN;
-const PAD_VER = "87c835b (2026-11-09)"; // tools/build-pad.sh が版に置き換える
+const PAD_VER = "2f4bb5e (2026-11-09)"; // tools/build-pad.sh が版に置き換える
+const PAD_FILES = ["./", "index.html", "rtclink.js", "vendor/qrcode.js", "vendor/jsQR.js", "manifest.json", "icon.png"];
 let ws = null, link = null;
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws?k=${encodeURIComponent(TOKEN)}&role=pad`);
@@ -629,19 +636,29 @@ else {
   // ホーム画面から開いたとき(standalone)は「ホーム画面に追加」の案内は要らない
   if (navigator.standalone || matchMedia("(display-mode: standalone)").matches) $("pair-home").style.display = "none";
   $("pad-ver").textContent = "pdfeditor-pad " + PAD_VER;
-  // 一度開けば、ネットにつながらなくても開けるように。新しい版が出ていたら、つないでいないときに読み込み直す
+  // 一度開けば iPad に取っておいたページだけを使う(ネットが無くても開ける。自動では新しくしない)。
+  // 新しい版にするのは「更新する」を押したときだけ(そのときだけ GitHub から取り直す)
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-    const had = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.register("sw.js").then((reg) => {
-      reg.update().catch(() => {});
-      addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
-    }).catch(() => {});
-    let reloading = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!had || reloading || (link && link.open) || pair.pc || pair.busy) return;
-      reloading = true; location.reload();
-    });
+    navigator.serviceWorker.register("sw.js").catch(() => {});
   }
+  $("pad-update").addEventListener("click", async () => {
+    const btn = $("pad-update");
+    btn.disabled = true; btn.textContent = tr("更新しています…");
+    try {
+      // cache: "reload" は取っておいたものを使わず、GitHub から取り直す
+      const got = await Promise.all(PAD_FILES.map(async (f) => { const r = await fetch(f, { cache: "reload" }); if (!r.ok) throw new Error(f); return [f, r]; }));
+      if ("caches" in window) {
+        const c = await caches.open("pad");
+        for (const [f, r] of got) await c.put(new URL(f, location.href).href, r);
+      }
+      const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.update().catch(() => {});
+      location.replace(location.pathname + location.search);
+    } catch (e) {
+      toast("更新できませんでした（ネットにつながっているか確かめてください）", 4000);
+      btn.disabled = false; btn.textContent = tr("更新する");
+    }
+  });
   loadScript("rtclink.js").then(() => {
     // PC の QR を iPad のカメラ(標準のカメラ)で読んで開いたときは、そのままつなぐ
     if (hashOffer()) pairStart(); else pairOpen("");

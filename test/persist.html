@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>2 回目から番号でつなぐ: 確かめ</title>
+<style>
+  :root { --bg:#1e1f22; --panel:#2a2c30; --line:#3a3d42; --text:#e8e8ea; --dim:#9a9ca3; --ok:#3fbf6f; --ng:#e5534b; --warn:#d9a33b; --accent:#4c8dff; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--text); font:15px/1.6 -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 19px; margin: 4px 0 6px; }
+  p { margin: 6px 0; }
+  .dim { color: var(--dim); font-size: 13px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 10px 0; }
+  .row { display:flex; gap:10px; align-items:flex-start; padding: 6px 0; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .mark { flex: none; width: 70px; font-weight: 700; }
+  .ok { color: var(--ok); } .ng { color: var(--ng); } .wait { color: var(--warn); }
+  .row b { display:block; }
+  .row small { color: var(--dim); word-break: break-all; }
+  button { font: inherit; color: #fff; background: var(--accent); border: 0; border-radius: 8px; padding: 10px 16px; margin: 4px 6px 4px 0; }
+  button.sub { background: var(--panel); border: 1px solid var(--line); color: var(--text); }
+  textarea { width: 100%; height: 150px; font: 12px ui-monospace, Menlo, Consolas, monospace; background:#16171a; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>2 回目から「番号を打つだけ」でつなげるか: 確かめ</h1>
+  <p class="dim">iPad の Safari（またはホーム画面のアプリ）で開いてください。1 回目のあと、<b>このページを閉じてもう一度開く</b>と、鍵を覚えていられるかが分かります。外には何も送りません（この画面の中だけで確かめます）。</p>
+  <div class="card" id="results"></div>
+  <div>
+    <button id="cam">カメラを一瞬使って確かめる（④）</button>
+    <button class="sub" id="again">もう一度確かめる</button>
+    <button class="sub" id="reset">覚えた鍵を消す</button>
+  </div>
+  <p class="dim">終わったら、下の結果をコピーして送るか、画面の写真を送ってください。</p>
+  <textarea id="out" readonly></textarea>
+  <button class="sub" id="copy">結果をコピー</button>
+</main>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const R = {}; // 結果
+const ITEMS = [
+  ["cert", "① 暗号の鍵を覚えておけるか（閉じて開き直しても同じ鍵）"],
+  ["munge", "② つなぐための合言葉を毎回同じにできるか"],
+  ["connect", "③ 合言葉を同じにして、実際につながるか（この画面の中で）"],
+  ["ipNoCam", "④ カメラを使わずに iPad の住所が分かるか"],
+  ["ipCam", "⑤ カメラを一瞬使えば住所が分かるか"],
+  ["port", "⑥ ポート番号（毎回変わるはず）"],
+];
+function show() {
+  $("results").innerHTML = ITEMS.map(([k, label]) => {
+    const r = R[k] || { s: "wait", t: "まだ" };
+    const m = { ok: ["はい", "ok"], ng: ["いいえ", "ng"], wait: ["…", "wait"], info: ["参考", "wait"] }[r.s];
+    return `<div class="row"><div class="mark ${m[1]}">${m[0]}</div><div><b>${label}</b><small>${esc(r.t || "")}</small></div></div>`;
+  }).join("");
+  $("out").value = [`端末: ${navigator.userAgent}`, `ホーム画面のアプリ: ${navigator.standalone || matchMedia("(display-mode: standalone)").matches ? "はい" : "いいえ"}`, `時刻: ${new Date().toLocaleString()}`]
+    .concat(ITEMS.map(([k, label]) => `${label}: ${(R[k] && R[k].s) || "まだ"} ${(R[k] && R[k].t) || ""}`)).join("\n");
+}
+const esc = (s) => String(s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]);
+const set = (k, s, t) => { R[k] = { s, t }; show(); };
+
+// ---------- 覚えておく場所(IndexedDB) ----------
+function db() {
+  return new Promise((res, rej) => {
+    const q = indexedDB.open("pdfeditor-pad-check", 1);
+    q.onupgradeneeded = () => q.result.createObjectStore("kv");
+    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+  });
+}
+async function kv(op, key, val) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const tx = d.transaction("kv", op === "get" ? "readonly" : "readwrite");
+    const st = tx.objectStore("kv");
+    const q = op === "get" ? st.get(key) : op === "del" ? st.delete(key) : st.put(val, key);
+    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+  });
+}
+
+// ---------- WebRTC の小道具 ----------
+const fpOf = (sdp) => (sdp.match(/a=fingerprint:\S+ (\S+)/) || [])[1] || "";
+function gathered(pc, ms = 4000) {
+  return new Promise((res) => {
+    if (pc.iceGatheringState === "complete") return res();
+    const t = setTimeout(res, ms);
+    pc.addEventListener("icegatheringstatechange", () => { if (pc.iceGatheringState === "complete") { clearTimeout(t); res(); } });
+  });
+}
+function cands(sdp) {
+  return sdp.split(/\r?\n/).map((l) => l.match(/^a=candidate:\S+ 1 udp \d+ (\S+) (\d+) typ (\S+)/i)).filter(Boolean).map((m) => ({ ip: m[1], port: +m[2], typ: m[3] }));
+}
+// 合言葉を決まったものに書き換える(1 回目に覚えたものを毎回使う想定)
+const UFRAG = "pdfe", PWD = "pdfeditorpadfixedpw0123";
+const munge = (sdp, u, p) => sdp.replace(/a=ice-ufrag:\S+/g, `a=ice-ufrag:${u}`).replace(/a=ice-pwd:\S+/g, `a=ice-pwd:${p}`);
+
+async function checkCert() {
+  if (!RTCPeerConnection.generateCertificate) { set("cert", "ng", "鍵を作る機能がありません"); return null; }
+  let saved = null;
+  try { saved = await kv("get", "cert"); } catch (e) { set("cert", "ng", "覚える場所(IndexedDB)が使えません: " + e.message); return null; }
+  if (saved && saved.cert) {
+    try {
+      const pc = new RTCPeerConnection({ iceServers: [], certificates: [saved.cert] });
+      pc.createDataChannel("x");
+      const o = await pc.createOffer();
+      const same = fpOf(o.sdp) === saved.fp;
+      pc.close();
+      set("cert", same ? "ok" : "ng", same ? `前回(${new Date(saved.at).toLocaleString()})と同じ鍵でした` : "鍵が変わっていました");
+      return saved.cert;
+    } catch (e) { set("cert", "ng", "覚えた鍵を使えません: " + e.message); return null; }
+  }
+  try {
+    const cert = await RTCPeerConnection.generateCertificate({ name: "ECDSA", namedCurve: "P-256" });
+    const pc = new RTCPeerConnection({ iceServers: [], certificates: [cert] });
+    pc.createDataChannel("x");
+    const o = await pc.createOffer(); pc.close();
+    await kv("put", "cert", { cert, fp: fpOf(o.sdp), at: Date.now() });
+    set("cert", "wait", "1 回目: 鍵を作って覚えました。このページを閉じて、もう一度開いてください");
+    return cert;
+  } catch (e) { set("cert", "ng", "鍵を覚えられません(" + e.name + "): " + e.message); return null; }
+}
+
+// ②③: PC 役(申し込み)と iPad 役(返事)をこの画面の中に作り、両方の合言葉を決まったものにしてつなぐ
+async function checkMunge(cert) {
+  let a, b;
+  try {
+    a = new RTCPeerConnection({ iceServers: [] });
+    b = new RTCPeerConnection({ iceServers: [], certificates: cert ? [cert] : undefined });
+    const ch = a.createDataChannel("t");
+    const opened = new Promise((res) => { ch.onopen = () => res(true); setTimeout(() => res(false), 8000); });
+    const offer = await a.createOffer();
+    await a.setLocalDescription({ type: "offer", sdp: munge(offer.sdp, "pcpc", "pcfixedpassword01234567") });
+    await gathered(a);
+    await b.setRemoteDescription(a.localDescription);
+    const ans = await b.createAnswer();
+    try {
+      await b.setLocalDescription({ type: "answer", sdp: munge(ans.sdp, UFRAG, PWD) });
+    } catch (e) { set("munge", "ng", "合言葉を書き換えると断られました(" + e.name + "): " + e.message); set("connect", "ng", "②ができないので確かめられません"); return; }
+    const kept = (b.localDescription.sdp.match(/a=ice-ufrag:(\S+)/) || [])[1] === UFRAG;
+    set("munge", kept ? "ok" : "ng", kept ? "返事の側(iPad)の合言葉を決まったものにできました" : "書き換えが無視されました");
+    await gathered(b);
+    await a.setRemoteDescription(b.localDescription);
+    const ok = await opened;
+    set("connect", ok ? "ok" : "ng", ok ? "つながりました" : "8 秒たってもつながりませんでした（状態: " + b.iceConnectionState + "）");
+  } catch (e) { set("munge", "ng", e.name + ": " + e.message); }
+  finally { try { a && a.close(); b && b.close(); } catch {} }
+}
+
+async function addrs() {
+  const pc = new RTCPeerConnection({ iceServers: [] });
+  pc.createDataChannel("x");
+  await pc.setLocalDescription(await pc.createOffer());
+  await gathered(pc);
+  const c = cands(pc.localDescription.sdp); pc.close();
+  return c;
+}
+const isIp = (s) => /^\d+\.\d+\.\d+\.\d+$/.test(s) || /^[0-9a-f:]+$/i.test(s);
+async function checkAddr() {
+  const c = await addrs();
+  const v4 = c.filter((x) => /^\d+\.\d+\.\d+\.\d+$/.test(x.ip));
+  const real = c.filter((x) => isIp(x.ip));
+  if (real.length) set("ipNoCam", "ok", "住所: " + [...new Set(real.map((x) => x.ip))].join(", "));
+  else set("ipNoCam", "ng", c.length ? "隠れています: " + c.map((x) => x.ip).join(", ") : "住所が出ませんでした");
+  set("port", "info", c.length ? "今回のポート: " + c.map((x) => x.port).join(", ") + "（開き直すと変わるか見てください）" : "なし");
+  return v4;
+}
+async function checkCam() {
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    const c = await addrs();
+    s.getTracks().forEach((t) => t.stop());
+    const real = c.filter((x) => isIp(x.ip));
+    set("ipCam", real.length ? "ok" : "ng", real.length ? "住所: " + [...new Set(real.map((x) => x.ip))].join(", ") + " ／ ポート: " + real.map((x) => x.port).join(", ") : "カメラを使っても隠れていました: " + c.map((x) => x.ip).join(", "));
+  } catch (e) { set("ipCam", "ng", "カメラが使えません(" + e.name + ")"); }
+}
+
+async function run() {
+  for (const [k] of ITEMS) delete R[k];
+  show();
+  const cert = await checkCert();
+  await checkMunge(cert);
+  await checkAddr();
+  if (!R.ipCam) set("ipCam", "wait", "「カメラを一瞬使って確かめる」を押してください");
+}
+$("cam").onclick = checkCam;
+$("again").onclick = run;
+$("reset").onclick = async () => { try { await kv("del", "cert"); } catch {} run(); };
+$("copy").onclick = async () => { const t = $("out").value; try { await navigator.clipboard.writeText(t); $("copy").textContent = "コピーしました"; } catch { $("out").select(); document.execCommand("copy"); } };
+run();
+window.__check = R; // テスト用
+</script>
+</body>
+</html>
